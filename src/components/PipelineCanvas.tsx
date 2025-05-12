@@ -100,6 +100,10 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
     x = Math.round(x / gridSize) * gridSize;
     y = Math.round(y / gridSize) * gridSize;
     
+    // Ensure blocks stay within canvas bounds
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+    
     // Create new block
     const newBlock: PipelineBlock = {
       id: `block-${Date.now()}`,
@@ -130,6 +134,10 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
       // Snap to grid
       x = Math.round(x / gridSize) * gridSize;
       y = Math.round(y / gridSize) * gridSize;
+      
+      // Ensure blocks stay within canvas bounds
+      x = Math.max(0, x);
+      y = Math.max(0, y);
       
       setBlocks(blocks.map(block => 
         block.id === draggedBlock 
@@ -544,7 +552,13 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
         onDrop={onDrop}
         onDragOver={onDragOver}
         onClick={cancelConnection}
-        onMouseMove={updateConnection}
+        onMouseMove={(e) => {
+          // Handle both dragging and connection drawing
+          if (isDragging) {
+            onDragOver(e as unknown as React.DragEvent);
+          }
+          updateConnection(e);
+        }}
         onMouseUp={endBlockDrag}
         onMouseLeave={endBlockDrag}
       >
@@ -593,11 +607,13 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
                 "border-2",
                 isSelected ? "border-primary" : "border-transparent",
                 "transition-all duration-200",
-                block.isConfigured ? "bg-white" : "bg-amber-50"
+                block.isConfigured ? "bg-white" : "bg-amber-50",
+                isDragging && draggedBlock === block.id ? "cursor-grabbing" : "cursor-grab"
               )}
               style={{
                 left: `${block.x}px`,
                 top: `${block.y}px`,
+                zIndex: isDragging && draggedBlock === block.id ? 10 : 1
               }}
               onClick={(e) => selectBlock(block, e)}
             >
@@ -613,7 +629,7 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
               
               <div className="flex flex-col items-center">
                 <div 
-                  className="cursor-move flex items-center justify-center mb-1"
+                  className="cursor-move flex items-center justify-center mb-1 w-full"
                   onMouseDown={(e) => startBlockDrag(block, e)}
                 >
                   <Move size={16} className="text-gray-500" />
