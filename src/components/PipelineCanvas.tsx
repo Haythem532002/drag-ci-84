@@ -11,7 +11,8 @@ import {
   ChevronRight,
   AlertCircle,
   Bell,
-  Archive
+  Archive,
+  Move
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -75,6 +76,9 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
   const [connectionEnd, setConnectionEnd] = useState<{ x: number, y: number } | null>(null);
   const [generatedYaml, setGeneratedYaml] = useState<string>('');
   const [showYamlModal, setShowYamlModal] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedBlock, setDraggedBlock] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState<{x: number, y: number}>({x: 0, y: 0});
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const gridSize = 20; // Grid size for snapping
@@ -116,6 +120,23 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
   // Handle drag over to allow dropping
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    
+    // If we're dragging a block within the canvas, update its position
+    if (isDragging && draggedBlock && canvasRef.current) {
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      let x = e.clientX - canvasRect.left - dragOffset.x;
+      let y = e.clientY - canvasRect.top - dragOffset.y;
+      
+      // Snap to grid
+      x = Math.round(x / gridSize) * gridSize;
+      y = Math.round(y / gridSize) * gridSize;
+      
+      setBlocks(blocks.map(block => 
+        block.id === draggedBlock 
+          ? { ...block, x, y } 
+          : block
+      ));
+    }
   };
   
   // Handle block selection
@@ -140,6 +161,29 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
       }
     } else {
       onSelectBlock(block);
+    }
+  };
+  
+  // Start block drag
+  const startBlockDrag = (block: PipelineBlock, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Set offset to maintain position relative to where user clicked on the block
+    const offsetX = e.nativeEvent.offsetX;
+    const offsetY = e.nativeEvent.offsetY;
+    
+    setIsDragging(true);
+    setDraggedBlock(block.id);
+    setDragOffset({ x: offsetX, y: offsetY });
+  };
+  
+  // End block drag
+  const endBlockDrag = () => {
+    if (isDragging) {
+      setIsDragging(false);
+      setDraggedBlock(null);
+      toast.success('Block position updated');
     }
   };
   
@@ -177,7 +221,14 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
       setConnectionStart(null);
       setConnectionEnd(null);
     }
-    onSelectBlock(null);
+    
+    // Also handle ending block drag here
+    endBlockDrag();
+    
+    // Deselect block only if no drag operation was in progress
+    if (!isDragging) {
+      onSelectBlock(null);
+    }
   };
   
   // Delete a block and its connections
@@ -494,6 +545,8 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
         onDragOver={onDragOver}
         onClick={cancelConnection}
         onMouseMove={updateConnection}
+        onMouseUp={endBlockDrag}
+        onMouseLeave={endBlockDrag}
       >
         {/* SVG layer for connections */}
         <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
@@ -559,7 +612,13 @@ const PipelineCanvas = ({ onSelectBlock, selectedBlock, exportFormat }: Pipeline
               </div>
               
               <div className="flex flex-col items-center">
-                <BlockIcon className="h-6 w-6 mb-1" />
+                <div 
+                  className="cursor-move flex items-center justify-center mb-1"
+                  onMouseDown={(e) => startBlockDrag(block, e)}
+                >
+                  <Move size={16} className="text-gray-500" />
+                  <BlockIcon className="h-6 w-6 ml-1" />
+                </div>
                 <span className="text-xs font-medium text-center">
                   {getBlockName(block.type)}
                 </span>
